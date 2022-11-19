@@ -1,8 +1,18 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:intl/intl.dart';
+// import 'widgets/sized_icon_button.dart';
+
+import 'package:logger/logger.dart';
+import 'package:spotify_sdk/models/connection_status.dart';
+import 'package:spotify_sdk/models/crossfade_state.dart';
+import 'package:spotify_sdk/models/image_uri.dart';
+import 'package:spotify_sdk/models/player_context.dart';
+import 'package:spotify_sdk/models/player_state.dart';
 import 'package:spotify_sdk/spotify_sdk.dart';
 
 Future<void> main() async {
@@ -19,16 +29,8 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Flutter Demo',
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // Try running your application with "flutter run". You'll see the
-        // application has a blue toolbar. Then, without quitting the app, try
-        // changing the primarySwatch below to Colors.green and then invoke
-        // "hot reload" (press "r" in the console where you ran "flutter run",
-        // or simply save your changes to "hot reload" in a Flutter IDE).
-        // Notice that the counter didn't reset back to zero; the application
-        // is not restarted.
-        primarySwatch: Colors.blue,
+        useMaterial3: true,
+        primarySwatch: Colors.green,
       ),
       home: const MyHomePage(title: 'Flutter Demo Home Page'),
     );
@@ -36,15 +38,6 @@ class MyApp extends StatelessWidget {
 }
 
 class MyHomePage extends StatefulWidget {
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
   final String title;
 
   const MyHomePage({Key? key, required this.title}) : super(key: key);
@@ -55,59 +48,21 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   late String _timeString;
+  bool _connected = false;
+  bool _loading = false;
+  String _authenticationToken = '';
 
-  @override
-  Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-
-    return Scaffold(
-      appBar: AppBar(
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Invoke "debug painting" (press "p" in the console, choose the
-          // "Toggle Debug Paint" action from the Flutter Inspector in Android
-          // Studio, or the "Toggle Debug Paint" command in Visual Studio Code)
-          // to see the wireframe for each widget.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text(
-              'Current time',
-            ),
-            Text(
-              _timeString,
-              style: Theme.of(context).textTheme.headline5,
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _getAccessToken,
-        tooltip: 'Login',
-        child: const Icon(Icons.login),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
-    );
-  }
+  final Logger _logger = Logger(
+    //filter: CustomLogFilter(), // custom logfilter can be used to have logs in release mode
+    printer: PrettyPrinter(
+      methodCount: 2, // number of method calls to be displayed
+      errorMethodCount: 8, // number of method calls if stacktrace is provided
+      lineLength: 120, // width of the output
+      colors: true, // Colorful log messages
+      printEmojis: true, // Print an emoji for each log message
+      printTime: true,
+    ),
+  );
 
   @override
   void initState() {
@@ -116,21 +71,107 @@ class _MyHomePageState extends State<MyHomePage> {
     super.initState();
   }
 
-  Future<String> _getAccessToken() async {
-    // try {
-    var authenticationToken = await SpotifySdk.getAccessToken(
-        clientId: dotenv.env['CLIENT_ID'].toString(),
-        redirectUrl: dotenv.env['REDIRECT_URL'].toString(),
-        scope: 'app-remote-control, '
-            'user-modify-playback-state');
-    return authenticationToken;
-    // } on PlatformException catch (e) {
-    //   setStatus(e.code, message: e.message);
-    //   return Future.error('$e.code: $e.message');
-    // } on MissingPluginException {
-    //   setStatus('not implemented');
-    //   return Future.error('not implemented');
-    // }
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: StreamBuilder<ConnectionStatus>(
+        stream: SpotifySdk.subscribeConnectionStatus(),
+        builder: (context, snapshot) {
+          _connected = false;
+          var data = snapshot.data;
+          if (data != null) {
+            _connected = data.connected;
+          }
+          return Scaffold(
+            appBar: AppBar(title: Text(widget.title)),
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  const Text(
+                    'Current time',
+                  ),
+                  Text(
+                    _timeString,
+                    style: Theme.of(context).textTheme.headline5,
+                  ),
+                ],
+              ),
+            ),
+            persistentFooterButtons: <Widget>[
+              Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: <Widget>[
+                    IconButton(
+                      onPressed: resume,
+                      icon: const Icon(Icons.play_arrow),
+                      alignment: Alignment.bottomLeft,
+                    ),
+                    IconButton(
+                      onPressed: pause,
+                      icon: const Icon(Icons.pause),
+                      alignment: Alignment.bottomLeft,
+                    ),
+                    IconButton(
+                      onPressed: stop,
+                      icon: const Icon(Icons.stop),
+                      alignment: Alignment.bottomLeft,
+                    ),
+                    IconButton(
+                      onPressed: connectToSpotifyRemote,
+                      tooltip: 'Refresh Spotify connection',
+                      icon: const Icon(Icons.connect_without_contact),
+                    )
+                  ])
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> connectToSpotifyRemote() async {
+    try {
+      setState(() {
+        _loading = true;
+      });
+      // await getAccessToken();
+      var result = await SpotifySdk.connectToSpotifyRemote(
+          clientId: dotenv.env['CLIENT_ID'].toString(),
+          redirectUrl: dotenv.env['REDIRECT_URI'].toString());
+      setStatus(result
+          ? 'connect to spotify successful'
+          : 'connect to spotify failed');
+      setState(() {
+        _loading = false;
+      });
+    } on PlatformException catch (e) {
+      setState(() {
+        _loading = false;
+      });
+      setStatus(e.code, message: e.message);
+    } on MissingPluginException {
+      setState(() {
+        _loading = false;
+      });
+      setStatus('not implemented');
+    }
+  }
+
+  Future<void> play() async {
+    await SpotifySdk.play(spotifyUri: 'spotify:track:1e0OVY3IiMNyeGGQv3aerm');
+  }
+
+  Future<void> resume() async {
+    await SpotifySdk.resume();
+  }
+
+  Future<void> pause() async {
+    await SpotifySdk.pause();
+  }
+
+  Future<void> stop() async {
+    await SpotifySdk.seekTo(positionedMilliseconds: 0);
   }
 
   _getTimeString() {
@@ -139,5 +180,10 @@ class _MyHomePageState extends State<MyHomePage> {
     setState(() {
       _timeString = timeString;
     });
+  }
+
+  void setStatus(String code, {String? message}) {
+    var text = message ?? '';
+    _logger.i('$code$text');
   }
 }
