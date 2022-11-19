@@ -48,7 +48,7 @@ class _SyncusState extends State<Syncus> {
   @override
   void initState() {
     _getTimeString();
-    Timer.periodic(const Duration(milliseconds: 100), (t) => _getTimeString());
+    Timer.periodic(const Duration(milliseconds: 101), (t) => _getTimeString());
     super.initState();
   }
 
@@ -113,6 +113,10 @@ class _SyncusState extends State<Syncus> {
   }
 
   Future<void> connectToSpotifyRemote() async {
+    try {
+      await SpotifySdk.disconnect();
+    } catch (e) {}
+
     try {
       setState(() {
         _loading = true;
