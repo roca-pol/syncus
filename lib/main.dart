@@ -17,36 +17,17 @@ import 'package:spotify_sdk/spotify_sdk.dart';
 
 Future<void> main() async {
   await dotenv.load(fileName: '.env');
-  runApp(const MyApp());
+  runApp(const Syncus());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({Key? key}) : super(key: key);
-
-  // This widget is the root of your application.
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        useMaterial3: true,
-        primarySwatch: Colors.green,
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
-    );
-  }
-}
-
-class MyHomePage extends StatefulWidget {
-  final String title;
-
-  const MyHomePage({Key? key, required this.title}) : super(key: key);
+class Syncus extends StatefulWidget {
+  const Syncus({Key? key}) : super(key: key);
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<Syncus> createState() => _SyncusState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
+class _SyncusState extends State<Syncus> {
   late String _timeString;
   bool _connected = false;
   bool _loading = false;
@@ -74,6 +55,7 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      theme: ThemeData(useMaterial3: true, primarySwatch: Colors.green),
       home: StreamBuilder<ConnectionStatus>(
         stream: SpotifySdk.subscribeConnectionStatus(),
         builder: (context, snapshot) {
@@ -83,7 +65,7 @@ class _MyHomePageState extends State<MyHomePage> {
             _connected = data.connected;
           }
           return Scaffold(
-            appBar: AppBar(title: Text(widget.title)),
+            appBar: AppBar(title: const Text('Syncus')),
             body: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -135,7 +117,6 @@ class _MyHomePageState extends State<MyHomePage> {
       setState(() {
         _loading = true;
       });
-      // await getAccessToken();
       var result = await SpotifySdk.connectToSpotifyRemote(
           clientId: dotenv.env['CLIENT_ID'].toString(),
           redirectUrl: dotenv.env['REDIRECT_URI'].toString());
