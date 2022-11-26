@@ -2,5 +2,5 @@ import 'package:dart_frog/dart_frog.dart';
 
 Response onRequest(RequestContext context) {
   return Response.json(
-      body: {'server_timestamp': DateTime.now().millisecondsSinceEpoch});
+      body: {'server_timestamp': DateTime.now().microsecondsSinceEpoch});
 }
