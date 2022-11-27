@@ -1,18 +1,18 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:intl/intl.dart';
-// import 'widgets/sized_icon_button.dart';
-
 import 'package:logger/logger.dart';
 import 'package:spotify_sdk/models/connection_status.dart';
-import 'package:spotify_sdk/models/crossfade_state.dart';
-import 'package:spotify_sdk/models/image_uri.dart';
-import 'package:spotify_sdk/models/player_context.dart';
-import 'package:spotify_sdk/models/player_state.dart';
 import 'package:spotify_sdk/spotify_sdk.dart';
+import 'package:syncus/ui/client.dart';
+import 'package:syncus/ui/overlay.dart';
+import 'package:syncus/ui/synchronize.dart';
+
+const nPings = 5;
 
 class Syncus extends StatefulWidget {
   const Syncus({Key? key}) : super(key: key);
@@ -22,10 +22,13 @@ class Syncus extends StatefulWidget {
 }
 
 class _SyncusState extends State<Syncus> {
-  late String _timeString;
+  late String _localTimeString;
+  late String _serverTimeString;
   bool _connected = false;
   bool _loading = false;
   String _authenticationToken = '';
+  final _clock = ServerClockSynchronization('https://9c60-83-41-95-71.ngrok.io',
+      nPings: nPings);
 
   final Logger _logger = Logger(
     //filter: CustomLogFilter(), // custom logfilter can be used to have logs in release mode
@@ -41,9 +44,9 @@ class _SyncusState extends State<Syncus> {
 
   @override
   void initState() {
-    _getTimeString();
-    Timer.periodic(const Duration(milliseconds: 101), (t) => _getTimeString());
     super.initState();
+    _getTimeString();
+    Timer.periodic(const Duration(milliseconds: 25), (t) => _getTimeString());
   }
 
   @override
@@ -53,26 +56,36 @@ class _SyncusState extends State<Syncus> {
       home: StreamBuilder<ConnectionStatus>(
         stream: SpotifySdk.subscribeConnectionStatus(),
         builder: (context, snapshot) {
-          _connected = false;
-          var data = snapshot.data;
-          if (data != null) {
-            _connected = data.connected;
-          }
+          _connected = snapshot.data?.connected == true;
+          if (!_connected) connectToSpotifyRemote();
+
           return Scaffold(
             appBar: AppBar(title: const Text('Syncus')),
-            body: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: <Widget>[
-                  const Text(
-                    'Current time',
+            body: Stack(
+              children: [
+                Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      // const Text(
+                      //   'Local time',
+                      // ),
+                      // Text(
+                      //   _localTimeString,
+                      //   style: Theme.of(context).textTheme.headline1,
+                      // ),
+                      const Text(
+                        'Server time',
+                      ),
+                      Text(
+                        _serverTimeString,
+                        style: Theme.of(context).textTheme.headline1,
+                      ),
+                    ],
                   ),
-                  Text(
-                    _timeString,
-                    style: Theme.of(context).textTheme.headline5,
-                  ),
-                ],
-              ),
+                ),
+                _connected ? Container() : OverlayView.yourOverLayWidget()
+              ],
             ),
             persistentFooterButtons: <Widget>[
               Row(
@@ -107,34 +120,32 @@ class _SyncusState extends State<Syncus> {
   }
 
   Future<void> connectToSpotifyRemote() async {
+    if (_loading) return;
+    _loading = true;
+
     try {
       await SpotifySdk.disconnect();
     } catch (e) {}
 
     try {
-      setState(() {
-        _loading = true;
-      });
       var result = await SpotifySdk.connectToSpotifyRemote(
           clientId: dotenv.env['CLIENT_ID'].toString(),
           redirectUrl: dotenv.env['REDIRECT_URI'].toString());
       setStatus(result
           ? 'connect to spotify successful'
           : 'connect to spotify failed');
-      setState(() {
-        _loading = false;
-      });
     } on PlatformException catch (e) {
-      setState(() {
-        _loading = false;
-      });
       setStatus(e.code, message: e.message);
     } on MissingPluginException {
-      setState(() {
-        _loading = false;
-      });
       setStatus('not implemented');
     }
+    _loading = false;
+  }
+
+  Future<void> pause() async {
+    await _clock.synchronize();
+    print(_clock.serverTimestamp);
+    // await SpotifySdk.pause();
   }
 
   Future<void> play() async {
@@ -145,8 +156,9 @@ class _SyncusState extends State<Syncus> {
     await SpotifySdk.resume();
   }
 
-  Future<void> pause() async {
-    await SpotifySdk.pause();
+  void setStatus(String code, {String? message}) {
+    var text = message ?? '';
+    _logger.i('$code$text');
   }
 
   Future<void> stop() async {
@@ -154,15 +166,17 @@ class _SyncusState extends State<Syncus> {
   }
 
   _getTimeString() {
-    final timeString = DateFormat('kk:mm:ss.SSS').format(DateTime.now());
-    // final timeString = DateTime.now().toIso8601String();
+    final localTimeString = DateFormat('kk:mm:ss').format(DateTime.now());
+    final String serverTimeString;
+    if (_clock.isSynchronized) {
+      serverTimeString = DateFormat('kk:mm:ss')
+          .format(DateTime.fromMicrosecondsSinceEpoch(_clock.serverTimestamp));
+    } else {
+      serverTimeString = '--:--:--';
+    }
     setState(() {
-      _timeString = timeString;
+      _localTimeString = localTimeString;
+      _serverTimeString = serverTimeString;
     });
-  }
-
-  void setStatus(String code, {String? message}) {
-    var text = message ?? '';
-    _logger.i('$code$text');
   }
 }

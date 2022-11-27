@@ -11,6 +11,7 @@ import '../routes/index.dart' as index;
 import '../routes/api/juncture/index.dart' as api_juncture_index;
 import '../routes/api/juncture/[id].dart' as api_juncture_$id;
 
+import '../routes/_middleware.dart' as middleware;
 import '../routes/api/juncture/_middleware.dart' as api_juncture_middleware;
 
 void main() => hotReload(createServer);
@@ -23,7 +24,7 @@ Future<HttpServer> createServer() {
 }
 
 Handler buildRootHandler() {
-  final pipeline = const Pipeline();
+  final pipeline = const Pipeline().addMiddleware(middleware.middleware);
   final router = Router()
     ..mount('/api/juncture', (context) => buildApiJunctureHandler()(context))
     ..mount('/', (context) => buildHandler()(context));

@@ -6,20 +6,19 @@ import 'models.dart';
 /// * U - Update
 /// * D - Delete
 abstract class DataSource<T> {
-  /// Create and return the newly created todo.
+  /// Create and return the newly created elements.
   Future<T> create(T element);
 
-  /// Return all todos.
+  /// Return all elements.
   Future<List<T>> readAll();
 
-  /// Return a todo with the provided [id] if one exists.
+  /// Return a elements with the provided [id] if one exists.
   Future<T?> read(String id);
 
-  /// Update the todo with the provided [id] to match [T] and
-  /// return the updated element.
+  /// Update the elements with [T] if present, and return the updated element.
   Future<T> update(T element);
 
-  /// Delete the todo with the provided [id] if one exists.
+  /// Delete the elements with the provided [id] if one exists.
   Future<void> delete(String id);
 }
 
