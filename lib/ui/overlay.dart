@@ -1,28 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:loading_animation_widget/loading_animation_widget.dart';
 
 class OverlayView extends StatelessWidget {
-  final ValueNotifier<bool> toggle;
-  const OverlayView({Key? key, required this.toggle}) : super(key: key);
+  const OverlayView({Key? key}) : super(key: key);
+
+  // @override
+  // Widget build(BuildContext context) {
+  //   return ValueListenableBuilder<bool>(
+  //     valueListenable: toggle,
+  //     builder: (context, value, child) {
+  //       if (value) {
+  //         return yourOverLayWidget();
+  //       } else {
+  //         return Container();
+  //       }
+  //     },
+  //   );
+  // }
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<bool>(
-      valueListenable: toggle,
-      builder: (context, value, child) {
-        if (value) {
-          return yourOverLayWidget();
-        } else {
-          return Container();
-        }
-      },
-    );
-  }
-
-  static Container yourOverLayWidget() {
     return Container(
       color: Colors.black.withOpacity(0.5),
       child: Padding(
-        padding: const EdgeInsets.all(8.0),
+        padding: const EdgeInsets.all(15.0),
         child: Center(
           child: Row(
             children: [
@@ -31,25 +32,33 @@ class OverlayView extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Row(
-                        children: [
-                          Spacer(),
-                          Icon(Icons.close_outlined),
-                        ],
+                      // Row(
+                      //   children: [
+                      //     Spacer(),
+                      //     const Padding(
+                      //       padding: EdgeInsets.all(10.0),
+                      //       child: Icon(Icons.close_outlined),
+                      //     ),
+                      //   ],
+                      // ),
+                      const SizedBox(
+                        height: 16,
                       ),
-                      Icon(
-                        Icons.error_rounded,
-                        color: Colors.red,
-                        size: 50,
-                      ),
-                      SizedBox(
+                      // Icon(
+                      //   Icons.login,
+                      //   color: Colors.greenAccent[400],
+                      //   size: 50,
+                      // ),
+                      LoadingAnimationWidget.staggeredDotsWave(
+                          color: Colors.lightGreen, size: 50),
+                      const SizedBox(
                         height: 16,
                       ),
                       Column(
-                        children: [
-                          Text('hola'),
+                        children: const [
+                          Text('Connecting to Spotify...'),
                           SizedBox(
-                            height: 8,
+                            height: 12,
                           ),
                         ],
                       )

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:intl/intl.dart';
 import 'package:logger/logger.dart';
 import 'package:spotify_sdk/models/connection_status.dart';
 import 'package:spotify_sdk/spotify_sdk.dart';
+import 'package:syncus/ui/buttons.dart';
 import 'package:syncus/ui/client.dart';
 import 'package:syncus/ui/overlay.dart';
 import 'package:syncus/ui/synchronize.dart';
@@ -22,10 +24,15 @@ class Syncus extends StatefulWidget {
 }
 
 class _SyncusState extends State<Syncus> {
+  static const String tagAlphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  String _tag = '';
   late String _localTimeString;
   late String _serverTimeString;
   bool _connected = false;
   bool _loading = false;
+  Role _role = Role.lead;
+  bool _tagTextFrozen = true;
+  final TextEditingController _tagTextController = TextEditingController();
   String _authenticationToken = '';
   final _clock = ServerClockSynchronization('https://9c60-83-41-95-71.ngrok.io',
       nPings: nPings);
@@ -45,46 +52,118 @@ class _SyncusState extends State<Syncus> {
   @override
   void initState() {
     super.initState();
-    _getTimeString();
-    Timer.periodic(const Duration(milliseconds: 25), (t) => _getTimeString());
+    _updateTimeString();
+    Timer.periodic(
+        const Duration(milliseconds: 25), (t) => _updateTimeString());
+    _tag = _generateTag();
+    _tagTextController.text = _tag;
   }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      theme: ThemeData(useMaterial3: true, primarySwatch: Colors.green),
+      theme: ThemeData.dark(useMaterial3: true),
       home: StreamBuilder<ConnectionStatus>(
         stream: SpotifySdk.subscribeConnectionStatus(),
         builder: (context, snapshot) {
           _connected = snapshot.data?.connected == true;
           if (!_connected) connectToSpotifyRemote();
 
+          double screenWidth = MediaQuery.of(context).size.width;
+          double? fontSize = Theme.of(context).textTheme.titleLarge!.fontSize;
+
           return Scaffold(
-            appBar: AppBar(title: const Text('Syncus')),
+            appBar: AppBar(title: const Center(child: Text('Syncus'))),
             body: Stack(
               children: [
                 Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
-                    children: <Widget>[
-                      // const Text(
-                      //   'Local time',
-                      // ),
-                      // Text(
-                      //   _localTimeString,
-                      //   style: Theme.of(context).textTheme.headline1,
-                      // ),
-                      const Text(
-                        'Server time',
+                    children: [
+                      const Spacer(),
+                      Padding(
+                        padding: const EdgeInsets.all(15.0),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Card(
+                                  color:
+                                      const Color.fromARGB(255, 252, 255, 217),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(10.0),
+                                    child: Column(
+                                      children: [
+                                        RoleButton(
+                                          role: _role,
+                                          onPressed: _changeRole,
+                                        ),
+                                        const SizedBox(height: 10.0),
+                                        Container(
+                                            width: fontSize != null
+                                                ? fontSize * 6
+                                                : null,
+                                            child: TextField(
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                  color: Theme.of(context)
+                                                      .backgroundColor,
+                                                  fontSize: fontSize),
+                                              controller: _tagTextController,
+                                              onChanged: _onTagTextChanged,
+                                              readOnly: _tagTextFrozen,
+                                              maxLength: 6,
+                                              inputFormatters: [
+                                                ToUpperCaseFormatter()
+                                              ],
+                                              decoration: InputDecoration(
+                                                  focusedBorder:
+                                                      OutlineInputBorder(
+                                                          borderSide:
+                                                              const BorderSide(
+                                                                  color:
+                                                                      Colors
+                                                                          .black),
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(
+                                                                      15)),
+                                                  enabledBorder:
+                                                      OutlineInputBorder(
+                                                          borderSide:
+                                                              const BorderSide(
+                                                                  color: Colors
+                                                                      .black),
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(
+                                                                      15)),
+                                                  contentPadding:
+                                                      const EdgeInsets.all(
+                                                          10.0)),
+                                            ))
+                                      ],
+                                    ),
+                                  )),
+                            )
+                          ],
+                        ),
                       ),
-                      Text(
-                        _serverTimeString,
-                        style: Theme.of(context).textTheme.headline1,
-                      ),
+                      const Spacer(),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('Server clock'),
+                          Text(
+                            _serverTimeString,
+                            style: Theme.of(context).textTheme.headline1,
+                          )
+                        ],
+                      )
                     ],
                   ),
                 ),
-                _connected ? Container() : OverlayView.yourOverLayWidget()
+                // const OverlayView()
+                _connected ? Container() : const OverlayView()
               ],
             ),
             persistentFooterButtons: <Widget>[
@@ -143,9 +222,7 @@ class _SyncusState extends State<Syncus> {
   }
 
   Future<void> pause() async {
-    await _clock.synchronize();
-    print(_clock.serverTimestamp);
-    // await SpotifySdk.pause();
+    await SpotifySdk.pause();
   }
 
   Future<void> play() async {
@@ -165,7 +242,7 @@ class _SyncusState extends State<Syncus> {
     await SpotifySdk.seekTo(positionedMilliseconds: 0);
   }
 
-  _getTimeString() {
+  void _updateTimeString() {
     final localTimeString = DateFormat('kk:mm:ss').format(DateTime.now());
     final String serverTimeString;
     if (_clock.isSynchronized) {
@@ -178,5 +255,37 @@ class _SyncusState extends State<Syncus> {
       _localTimeString = localTimeString;
       _serverTimeString = serverTimeString;
     });
+  }
+
+  void _changeRole(Role role) {
+    if ((_role != Role.lead) & (role == Role.lead))
+      _tagTextController.text = _generateTag();
+
+    setState(() {
+      _role = role;
+      _tagTextFrozen = role == Role.lead;
+      _tag = _tagTextController.text;
+    });
+  }
+
+  String _generateTag() {
+    List<String> charList = tagAlphabet.split('')..shuffle();
+    return charList.getRange(0, 6).join();
+  }
+
+  void _onTagTextChanged(String text) {
+    setState(() {
+      _tag = text;
+    });
+  }
+}
+
+class ToUpperCaseFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    return newValue.copyWith(text: newValue.text.toUpperCase());
   }
 }
