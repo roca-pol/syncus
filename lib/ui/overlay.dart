@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
 
-class OverlayView extends StatelessWidget {
-  const OverlayView({Key? key}) : super(key: key);
+class LoadingOverlay extends StatelessWidget {
+  const LoadingOverlay({Key? key}) : super(key: key);
 
   // @override
   // Widget build(BuildContext context) {

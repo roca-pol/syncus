@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:syncus/logger.dart';
 
-class RoleButton extends StatelessWidget {
-  final Role role;
-  final Function(Role) onPressed;
-  const RoleButton({Key? key, required this.role, required this.onPressed})
-      : super(key: key);
+final roleProvider = StateProvider<Role>((_) => Role.lead);
+
+class RoleButton extends ConsumerWidget {
+  const RoleButton({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     var theme = Theme.of(context);
     return ToggleButtons(
       renderBorder: true,
@@ -27,14 +28,14 @@ class RoleButton extends StatelessWidget {
           child: Text('FOLLOW'),
         ),
       ],
-      isSelected: role == Role.lead ? [true, false] : [false, true],
-      onPressed: _onPressed,
+      isSelected: _role2selectionState(ref.watch(roleProvider)),
+      onPressed: (i) => ref.read(roleProvider.notifier).state = _index2role(i),
     );
   }
 
-  void _onPressed(int index) {
-    onPressed(index == 0 ? Role.lead : Role.follow);
-  }
+  static Role _index2role(int index) => index == 0 ? Role.lead : Role.follow;
+  static List<bool> _role2selectionState(Role role) =>
+      role == Role.lead ? [true, false] : [false, true];
 }
 
 enum Role { lead, follow }

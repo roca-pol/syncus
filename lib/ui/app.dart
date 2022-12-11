@@ -1,201 +1,149 @@
 import 'dart:async';
-import 'dart:math';
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:intl/intl.dart';
-import 'package:logger/logger.dart';
-import 'package:spotify_sdk/models/connection_status.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:spotify_sdk/spotify_sdk.dart';
-import 'package:syncus/ui/buttons.dart';
-import 'package:syncus/ui/client.dart';
+import 'package:syncus/logger.dart';
+import 'package:syncus/ui/clock.dart';
+import 'package:syncus/ui/role.dart';
 import 'package:syncus/ui/overlay.dart';
 import 'package:syncus/ui/synchronize.dart';
+import 'package:syncus/ui/tag.dart';
 
 const nPings = 5;
 
-class Syncus extends StatefulWidget {
-  const Syncus({Key? key}) : super(key: key);
+final connectionStatusProvider =
+    StreamProvider((_) => SpotifySdk.subscribeConnectionStatus());
 
-  @override
-  State<Syncus> createState() => _SyncusState();
-}
+final connectionProvider = Provider((ref) {
+  return ref.watch(connectionStatusProvider).when<bool>(
+        data: (snapshot) => snapshot.connected,
+        error: (error, stackTrace) => false,
+        loading: () => false,
+      );
+});
 
-class _SyncusState extends State<Syncus> {
-  static const String tagAlphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  String _tag = '';
-  late String _localTimeString;
-  late String _serverTimeString;
+class Syncus extends HookConsumerWidget {
+  Syncus({super.key});
+
   bool _connected = false;
   bool _loading = false;
-  Role _role = Role.lead;
-  bool _tagTextFrozen = true;
-  final TextEditingController _tagTextController = TextEditingController();
   String _authenticationToken = '';
-  final _clock = ServerClockSynchronization('https://9c60-83-41-95-71.ngrok.io',
+  final _sync = ServerClockSynchronization('https://9c60-83-41-95-71.ngrok.io',
       nPings: nPings);
 
-  final Logger _logger = Logger(
-    //filter: CustomLogFilter(), // custom logfilter can be used to have logs in release mode
-    printer: PrettyPrinter(
-      methodCount: 2, // number of method calls to be displayed
-      errorMethodCount: 8, // number of method calls if stacktrace is provided
-      lineLength: 120, // width of the output
-      colors: true, // Colorful log messages
-      printEmojis: true, // Print an emoji for each log message
-      printTime: true,
-    ),
-  );
-
   @override
-  void initState() {
-    super.initState();
-    _updateTimeString();
-    Timer.periodic(
-        const Duration(milliseconds: 25), (t) => _updateTimeString());
-    _tag = _generateTag();
-    _tagTextController.text = _tag;
-  }
+  Widget build(BuildContext context, WidgetRef ref) {
+    var isConnected = ref.watch(connectionProvider);
+    if (!isConnected) connectToSpotifyRemote();
 
-  @override
-  Widget build(BuildContext context) {
+    // double screenWidth = MediaQuery.of(context).size.width;
+    var animationCtrl = useAnimationController(
+        duration: Duration(seconds: 2),
+        initialValue: 0.0,
+        lowerBound: 0.0,
+        upperBound: 1.0);
+    final hasRun = useState(false);
+    if (!hasRun.value) {
+      animationCtrl.forward();
+      hasRun.value = true;
+    }
+    useAnimation(animationCtrl);
+    // if (animationCtrl.status == AnimationStatus.completed) {
+    //   animationCtrl.stop();
+    // } else {
+    //   var ticker = animationCtrl.repeat(reverse: true);
+    // }
+
+    logger.i('BUILD Main ' +
+        animationCtrl.value.toString() +
+        ' ' +
+        animationCtrl.status.toString());
+
     return MaterialApp(
-      theme: ThemeData.dark(useMaterial3: true),
-      home: StreamBuilder<ConnectionStatus>(
-        stream: SpotifySdk.subscribeConnectionStatus(),
-        builder: (context, snapshot) {
-          _connected = snapshot.data?.connected == true;
-          if (!_connected) connectToSpotifyRemote();
-
-          double screenWidth = MediaQuery.of(context).size.width;
-          double? fontSize = Theme.of(context).textTheme.titleLarge!.fontSize;
-
-          return Scaffold(
-            appBar: AppBar(title: const Center(child: Text('Syncus'))),
-            body: Stack(
-              children: [
-                Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Spacer(),
-                      Padding(
-                        padding: const EdgeInsets.all(15.0),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Card(
-                                  color:
-                                      const Color.fromARGB(255, 252, 255, 217),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(10.0),
-                                    child: Column(
-                                      children: [
-                                        RoleButton(
-                                          role: _role,
-                                          onPressed: _changeRole,
-                                        ),
-                                        const SizedBox(height: 10.0),
-                                        Container(
-                                            width: fontSize != null
-                                                ? fontSize * 6
-                                                : null,
-                                            child: TextField(
-                                              textAlign: TextAlign.center,
-                                              style: TextStyle(
-                                                  color: Theme.of(context)
-                                                      .backgroundColor,
-                                                  fontSize: fontSize),
-                                              controller: _tagTextController,
-                                              onChanged: _onTagTextChanged,
-                                              readOnly: _tagTextFrozen,
-                                              maxLength: 6,
-                                              inputFormatters: [
-                                                ToUpperCaseFormatter()
-                                              ],
-                                              decoration: InputDecoration(
-                                                  focusedBorder:
-                                                      OutlineInputBorder(
-                                                          borderSide:
-                                                              const BorderSide(
-                                                                  color:
-                                                                      Colors
-                                                                          .black),
-                                                          borderRadius:
-                                                              BorderRadius
-                                                                  .circular(
-                                                                      15)),
-                                                  enabledBorder:
-                                                      OutlineInputBorder(
-                                                          borderSide:
-                                                              const BorderSide(
-                                                                  color: Colors
-                                                                      .black),
-                                                          borderRadius:
-                                                              BorderRadius
-                                                                  .circular(
-                                                                      15)),
-                                                  contentPadding:
-                                                      const EdgeInsets.all(
-                                                          10.0)),
-                                            ))
-                                      ],
-                                    ),
-                                  )),
-                            )
-                          ],
-                        ),
-                      ),
-                      const Spacer(),
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
+        theme: ThemeData.dark(useMaterial3: true),
+        home: Scaffold(
+          appBar: AppBar(title: const Center(child: Text('Syncus'))),
+          body: Stack(
+            children: [
+              Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Spacer(),
+                    Padding(
+                      padding: const EdgeInsets.all(15.0),
+                      child: Row(
                         children: [
-                          const Text('Server clock'),
-                          Text(
-                            _serverTimeString,
-                            style: Theme.of(context).textTheme.headline1,
+                          Expanded(
+                            child: Card(
+                                color: const Color.fromARGB(255, 252, 255, 217),
+                                child: Padding(
+                                    padding: const EdgeInsets.all(10.0),
+                                    child: Center(
+                                      child: IntrinsicWidth(
+                                          child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          const RoleButton(),
+                                          const SizedBox(height: 10.0),
+                                          const TagTextField(),
+                                          const SizedBox(height: 10.0),
+                                          LinearProgressIndicator(
+                                            value: animationCtrl.value,
+                                          )
+                                        ],
+                                      )),
+                                    ))),
                           )
                         ],
-                      )
-                    ],
-                  ),
+                      ),
+                    ),
+                    const Spacer(),
+                    ServerClock(_sync)
+                  ],
                 ),
-                // const OverlayView()
-                _connected ? Container() : const OverlayView()
-              ],
-            ),
-            persistentFooterButtons: <Widget>[
-              Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: <Widget>[
-                    IconButton(
-                      onPressed: resume,
-                      icon: const Icon(Icons.play_arrow),
-                      alignment: Alignment.bottomLeft,
-                    ),
-                    IconButton(
-                      onPressed: pause,
-                      icon: const Icon(Icons.pause),
-                      alignment: Alignment.bottomLeft,
-                    ),
-                    IconButton(
-                      onPressed: stop,
-                      icon: const Icon(Icons.stop),
-                      alignment: Alignment.bottomLeft,
-                    ),
-                    IconButton(
-                      onPressed: connectToSpotifyRemote,
-                      tooltip: 'Refresh Spotify connection',
-                      icon: const Icon(Icons.connect_without_contact),
-                    )
-                  ])
+              ),
+              isConnected ? Container() : const LoadingOverlay()
             ],
-          );
-        },
-      ),
-    );
+          ),
+          persistentFooterButtons: <Widget>[
+            isConnected
+                ? Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: <Widget>[
+                        IconButton(
+                          onPressed: resume,
+                          icon: const Icon(Icons.play_arrow),
+                          alignment: Alignment.bottomLeft,
+                        ),
+                        IconButton(
+                          onPressed: pause,
+                          icon: const Icon(Icons.pause),
+                          alignment: Alignment.bottomLeft,
+                        ),
+                        IconButton(
+                          onPressed: stop,
+                          icon: const Icon(Icons.stop),
+                          alignment: Alignment.bottomLeft,
+                        ),
+                        IconButton(
+                          onPressed: connectToSpotifyRemote,
+                          tooltip: 'Refresh Spotify connection',
+                          icon: const Icon(Icons.connect_without_contact),
+                        )
+                      ])
+                : Container()
+          ],
+        ));
   }
 
   Future<void> connectToSpotifyRemote() async {
@@ -235,57 +183,10 @@ class _SyncusState extends State<Syncus> {
 
   void setStatus(String code, {String? message}) {
     var text = message ?? '';
-    _logger.i('$code$text');
+    logger.i('$code$text');
   }
 
   Future<void> stop() async {
     await SpotifySdk.seekTo(positionedMilliseconds: 0);
-  }
-
-  void _updateTimeString() {
-    final localTimeString = DateFormat('kk:mm:ss').format(DateTime.now());
-    final String serverTimeString;
-    if (_clock.isSynchronized) {
-      serverTimeString = DateFormat('kk:mm:ss')
-          .format(DateTime.fromMicrosecondsSinceEpoch(_clock.serverTimestamp));
-    } else {
-      serverTimeString = '--:--:--';
-    }
-    setState(() {
-      _localTimeString = localTimeString;
-      _serverTimeString = serverTimeString;
-    });
-  }
-
-  void _changeRole(Role role) {
-    if ((_role != Role.lead) & (role == Role.lead))
-      _tagTextController.text = _generateTag();
-
-    setState(() {
-      _role = role;
-      _tagTextFrozen = role == Role.lead;
-      _tag = _tagTextController.text;
-    });
-  }
-
-  String _generateTag() {
-    List<String> charList = tagAlphabet.split('')..shuffle();
-    return charList.getRange(0, 6).join();
-  }
-
-  void _onTagTextChanged(String text) {
-    setState(() {
-      _tag = text;
-    });
-  }
-}
-
-class ToUpperCaseFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    return newValue.copyWith(text: newValue.text.toUpperCase());
   }
 }
