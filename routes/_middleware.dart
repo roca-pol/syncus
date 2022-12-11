@@ -1,7 +1,7 @@
 import 'package:dart_frog/dart_frog.dart';
 import 'package:syncus/models/data_sources.dart';
 import 'package:syncus/models/models.dart';
-import 'package:syncus/utils.dart';
+import 'package:syncus/definitions.dart';
 
 final _dataSource = InMemoryDataSource<Juncture>();
 

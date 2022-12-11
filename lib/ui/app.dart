@@ -4,65 +4,48 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:spotify_sdk/spotify_sdk.dart';
 import 'package:syncus/logger.dart';
+import 'package:syncus/ui/client.dart';
 import 'package:syncus/ui/clock.dart';
+import 'package:syncus/ui/pbar.dart';
 import 'package:syncus/ui/role.dart';
 import 'package:syncus/ui/overlay.dart';
+import 'package:syncus/ui/sync_button.dart';
 import 'package:syncus/ui/synchronize.dart';
 import 'package:syncus/ui/tag.dart';
+import 'package:syncus/definitions.dart';
 
-const nPings = 5;
-
-final connectionStatusProvider =
+final connectionStreamProvider =
     StreamProvider((_) => SpotifySdk.subscribeConnectionStatus());
 
-final connectionProvider = Provider((ref) {
-  return ref.watch(connectionStatusProvider).when<bool>(
+final connectionStatusProvider = Provider((ref) {
+  return ref.watch(connectionStreamProvider).when<bool>(
         data: (snapshot) => snapshot.connected,
         error: (error, stackTrace) => false,
         loading: () => false,
       );
 });
 
-class Syncus extends HookConsumerWidget {
-  Syncus({super.key});
+final syncClientProvider =
+    Provider((_) => ServerClockSynchronization(serverUrl, nPings: nSyncPings));
 
-  bool _connected = false;
-  bool _loading = false;
-  String _authenticationToken = '';
-  final _sync = ServerClockSynchronization('https://9c60-83-41-95-71.ngrok.io',
-      nPings: nPings);
+final apiClientProvider = Provider((_) => APIClient(serverUrl));
+
+class Syncus extends HookConsumerWidget {
+  const Syncus({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    var isConnected = ref.watch(connectionProvider);
-    if (!isConnected) connectToSpotifyRemote();
-
-    // double screenWidth = MediaQuery.of(context).size.width;
-    var animationCtrl = useAnimationController(
-        duration: Duration(seconds: 2),
-        initialValue: 0.0,
-        lowerBound: 0.0,
-        upperBound: 1.0);
-    final hasRun = useState(false);
-    if (!hasRun.value) {
-      animationCtrl.forward();
-      hasRun.value = true;
+    var isConnected = ref.watch(connectionStatusProvider);
+    final isConnecting = useRef(false);
+    if (!isConnected && !isConnecting.value) {
+      connectToSpotifyRemote();
+      isConnecting.value = true;
     }
-    useAnimation(animationCtrl);
-    // if (animationCtrl.status == AnimationStatus.completed) {
-    //   animationCtrl.stop();
-    // } else {
-    //   var ticker = animationCtrl.repeat(reverse: true);
-    // }
 
-    logger.i('BUILD Main ' +
-        animationCtrl.value.toString() +
-        ' ' +
-        animationCtrl.status.toString());
+    logger.i('BUILD Main');
 
     return MaterialApp(
         theme: ThemeData.dark(useMaterial3: true),
@@ -81,7 +64,7 @@ class Syncus extends HookConsumerWidget {
                         children: [
                           Expanded(
                             child: Card(
-                                color: const Color.fromARGB(255, 252, 255, 217),
+                                color: Color.fromARGB(255, 209, 248, 223),
                                 child: Padding(
                                     padding: const EdgeInsets.all(10.0),
                                     child: Center(
@@ -97,9 +80,9 @@ class Syncus extends HookConsumerWidget {
                                           const SizedBox(height: 10.0),
                                           const TagTextField(),
                                           const SizedBox(height: 10.0),
-                                          LinearProgressIndicator(
-                                            value: animationCtrl.value,
-                                          )
+                                          ProgressBar(),
+                                          const SizedBox(height: 10.0),
+                                          SyncButton()
                                         ],
                                       )),
                                     ))),
@@ -108,7 +91,7 @@ class Syncus extends HookConsumerWidget {
                       ),
                     ),
                     const Spacer(),
-                    ServerClock(_sync)
+                    ServerClock(ref.watch(syncClientProvider))
                   ],
                 ),
               ),
@@ -135,11 +118,11 @@ class Syncus extends HookConsumerWidget {
                           icon: const Icon(Icons.stop),
                           alignment: Alignment.bottomLeft,
                         ),
-                        IconButton(
-                          onPressed: connectToSpotifyRemote,
-                          tooltip: 'Refresh Spotify connection',
-                          icon: const Icon(Icons.connect_without_contact),
-                        )
+                        // IconButton(
+                        //   onPressed: connectToSpotifyRemote,
+                        //   tooltip: 'Refresh Spotify connection',
+                        //   icon: const Icon(Icons.connect_without_contact),
+                        // )
                       ])
                 : Container()
           ],
@@ -147,9 +130,6 @@ class Syncus extends HookConsumerWidget {
   }
 
   Future<void> connectToSpotifyRemote() async {
-    if (_loading) return;
-    _loading = true;
-
     try {
       await SpotifySdk.disconnect();
     } catch (e) {}
@@ -166,7 +146,6 @@ class Syncus extends HookConsumerWidget {
     } on MissingPluginException {
       setStatus('not implemented');
     }
-    _loading = false;
   }
 
   Future<void> pause() async {

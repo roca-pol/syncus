@@ -9,22 +9,23 @@ class RoleButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    var theme = Theme.of(context);
+    const padding = EdgeInsets.symmetric(horizontal: 18);
+    final theme = Theme.of(context);
     return ToggleButtons(
       renderBorder: true,
-      borderColor: Colors.grey,
-      color: theme.primaryColor,
+      borderColor: theme.backgroundColor,
+      color: theme.backgroundColor,
       selectedColor: theme.colorScheme.onPrimary,
       fillColor: theme.backgroundColor,
       splashColor: theme.splashColor,
       borderRadius: BorderRadius.circular(15),
       children: const [
         Padding(
-          padding: EdgeInsets.symmetric(horizontal: 12),
+          padding: padding,
           child: Text('LEAD'),
         ),
         Padding(
-          padding: EdgeInsets.symmetric(horizontal: 12),
+          padding: padding,
           child: Text('FOLLOW'),
         ),
       ],

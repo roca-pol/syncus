@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:syncus/models/models.dart';
 
 class APIClient {
   final Dio _http;
@@ -8,22 +9,17 @@ class APIClient {
   void close() => _http.close();
 
   Future<Map<String, dynamic>> ping() async {
-    var res = await _http.get('/ping');
+    final res = await _http.get('/ping');
     return res.data;
   }
 
-  Future<Map<String, dynamic>> getJuncture(String id) async {
-    var res = await _http.get('/juncture/$id');
-    return res.data;
+  Future<Juncture> getJuncture(String id) async {
+    final res = await _http.get('/api/juncture/$id');
+    return Juncture.fromJson(res.data);
   }
 
-  Future<Map<String, dynamic>> createJuncture(
-      String id, String trackURI, int timestamp) async {
-    var res = await _http.post('/juncture', data: {
-      'id': id,
-      'trackURI': trackURI,
-      'microsecondTimestamp': timestamp
-    });
-    return res.data;
+  Future<Juncture> createJuncture(Juncture juncture) async {
+    final res = await _http.post('/api/juncture', data: juncture.toJson());
+    return Juncture.fromJson(res.data);
   }
 }

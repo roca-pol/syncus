@@ -7,6 +7,7 @@ class ServerClockSynchronization {
   final int nPings;
   int _delta = 0;
   bool _isSynchronized = false;
+  bool _isSynchronizing = false;
 
   ServerClockSynchronization(String host, {this.nPings = 5})
       : _client = APIClient(host);
@@ -14,9 +15,11 @@ class ServerClockSynchronization {
   Future<int> _pingServer() async => (await _client.ping())['serverTimestamp'];
 
   Future<void> synchronize() async {
+    if (_isSynchronizing) return;
+    _isSynchronizing = true;
     final deltas = <int>[];
 
-    var random = Random();
+    final random = Random();
     for (int i = 0; i < nPings; i++) {
       int t0 = DateTime.now().microsecondsSinceEpoch;
       int serverTime = await _pingServer();
@@ -30,8 +33,13 @@ class ServerClockSynchronization {
     print(deltas);
     _delta = deltas[nPings ~/ 2];
     _isSynchronized = true;
+    _isSynchronizing = true;
   }
 
+  int toServerTime(int timestamp) => timestamp + _delta;
+  int toLocalTime(int timestamp) => timestamp - _delta;
+
   bool get isSynchronized => _isSynchronized;
-  int get serverTimestamp => DateTime.now().microsecondsSinceEpoch + _delta;
+  int get serverTimestamp =>
+      toServerTime(DateTime.now().microsecondsSinceEpoch);
 }

@@ -23,9 +23,9 @@ class TagTextField extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    double fontSize = Theme.of(context).textTheme.titleLarge!.fontSize!;
-    var tag = ref.watch(tagProvider);
-    var controller = TextEditingController.fromValue(TextEditingValue(
+    final fontSize = Theme.of(context).textTheme.headlineMedium!.fontSize!;
+    final tag = ref.watch(tagProvider);
+    final controller = TextEditingController.fromValue(TextEditingValue(
       text: tag,
       selection: TextSelection.collapsed(offset: tag.length),
     ));
@@ -33,7 +33,10 @@ class TagTextField extends ConsumerWidget {
     return TextField(
       textAlign: TextAlign.center,
       style: TextStyle(
-          color: Theme.of(context).backgroundColor, fontSize: fontSize),
+        color: Theme.of(context).backgroundColor,
+        fontSize: fontSize,
+        // fontFamily: 'Times',
+      ),
       controller: controller,
       onChanged: (value) {
         ref.read(tagProvider.notifier).state = value;
@@ -49,6 +52,9 @@ class TagTextField extends ConsumerWidget {
               borderSide: const BorderSide(color: Colors.black),
               borderRadius: BorderRadius.circular(15)),
           contentPadding: const EdgeInsets.all(10.0)),
+      buildCounter: (BuildContext context,
+              {int? currentLength, int? maxLength, bool? isFocused}) =>
+          null,
     );
   }
 }
